@@ -1,65 +1,84 @@
 <?php
+ 
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Factory\AppFactory;
-
+use Slim\Exception\HttpNotFoundException;
+use ThiagoLuz\Tarefas\Service;
+use ThiagoLuz\Tarefas\Service\TarefasService;
+ 
 require __DIR__ . '/vendor/autoload.php';
-
+ 
 $app = AppFactory::create();
-$app->addBodyParsingMiddleware(); 
-$usuarios = [
-    ['id' => 1, 'login' => 'user1', 'senha' => '123', 'nome' => 'João', 'perfil' => 'admin'],
-    ['id' => 2, 'login' => 'user2', 'senha' => '456', 'nome' => 'Maria', 'perfil' => 'user'],
-
-];
-
-$app->post('/usuarios', function (Request $request, Response $response, array $args) use (&$usuarios) {
-    $dados = $request->getParsedBody();
-
-    if (empty($dados['login']) || empty($dados['senha'])) {
-        $response->getBody()->write(json_encode(['erro' => 'Login e senha são obrigatórios!']));
-        return $response->withStatus(400);
+ 
+// middleware é um evento que ocorre antes da requisição chegar na rota.
+ 
+$errorMiddleware = $app->addErrorMiddleware(true, true, true);
+$errorMiddleware->setErrorHandler(HttpNotFoundException::class, function (
+    Request $request,
+    Throwable $exception,
+    bool $displayErrorDetails,
+    bool $logErrors,
+    bool $logErrorDetails
+) use ($app) {
+    $response = $app->getResponseFactory()->createResponse();
+    $response->getBody()->write('{"error": "Recurso não foi encontrado"}');
+    return $response->withHeader('Content-Type', 'application/json')
+        ->withStatus(404);
+});
+ 
+$app->get('/tarefas', function (Request $request, Response $response, array $args) {
+    $tarefas_service = new TarefasService();
+    $tarefas = $tarefas_service->getAllTarefas();
+    $response->getBody()->write(json_encode($tarefas));
+    return $response->withHeader('content-type', 'application/json');
+});
+$app->post('/tarefas', function (Request $request, Response $response, array $args) {
+    $paramentos = (array) $request->getParsedBody();
+    if (!array_key_exists('titulo', $paramentos) || empty($paramentos['titulo'])) {
+        $response->getBody()->write(json_encode([
+            "mensagem" => "titulo é obrigatorio"
+        ]));
+        return $response->withHeader('content-type', 'application/json')->withStatus(400);
     }
-
-    $novoUsuario = [
-        'id' => count($usuarios) + 1,
-        'login' => $dados['login'],
-        'senha' => $dados['senha'],
-        'nome' => $dados['nome'] ?? null,
-        'perfil' => $dados['perfil'] ?? null
-    ];
-
-    $usuarios[] = $novoUsuario;
-    $response->getBody()->write(json_encode($novoUsuario));
-    return $response->withHeader('Content-Type', 'application/json')->withStatus(201);
+    $tarefa = array_merge(['titulo' => '', 'concluido' => false], $paramentos);
+    $tarefa_service = new TarefasService();
+    $tarefa_service->createTarefa($tarefa);
+ 
+    return $response->withStatus(201);
 });
-
-$app->get('/usuarios', function (Request $request, Response $response, array $args) use ($usuarios) {
-    $response->getBody()->write(json_encode(array_slice($usuarios, 0, 5)));
-    return $response->withHeader('Content-Type', 'application/json');
-});
-
-$app->delete('/usuarios/{id}', function (Request $request, Response $response, array $args) use (&$usuarios) {
-    $id = $args['id'];
-    $usuarios = array_filter($usuarios, fn($user) => $user['id'] != $id);
+ 
+ 
+$app->delete('/tarefas', function (Request $request, Response $response, array $args) {
+ 
     return $response->withStatus(204);
 });
-
-$app->put('/usuarios/{id}', function (Request $request, Response $response, array $args) use (&$usuarios) {
-    $id = $args['id'];
-    $dados = $request->getParsedBody();
-
-    foreach ($usuarios as &$user) {
-        if ($user['id'] == $id) {
-            $user['login'] = $dados['login'] ?? $user['login'];
-            $user['senha'] = $dados['senha'] ?? $user['senha'];
-            $user['nome'] = $dados['nome'] ?? $user['nome'];
-            $user['perfil'] = $dados['perfil'] ?? $user['perfil'];
-            return $response->withJson($user);
-        }
-    }
-
-    return $response->withStatus(404)->withJson(['erro' => 'Usuário não encontrado']);
+$app->put('/tarefas', function (Request $request, Response $response, array $args) {
+    return $response->withStatus(201);
 });
-
+ 
+$app->delete('/tarefas/{id}', function (Request $request, Response $response, array $args) {
+    $id = $args['id'];
+ 
+    return $response->withStatus(204);
+});
+ 
+$app->put('/tarefas/{id}', function (Request $request, Response $response, array $args) {
+    $id = $args['id'];
+    $dados_para_atualizar = (array) $request->getParsedBody();
+    if (array_key_exists('titulo', $dados_para_atualizar) && empty($dados_para_atualizar['titulo'])) {
+        $response->getBody()->write(json_encode([
+            "mensagem" => "titulo é obrigatorio"
+        ]));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+    }
+    $tarefa_service = new TarefasService();
+    $tarefa_service->updateTarefa($id, $dados_para_atualizar);
+ 
+    return $response->withStatus(201);
+});
+ 
+ 
+ 
 $app->run();
+ 
