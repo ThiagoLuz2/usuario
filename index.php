@@ -4,8 +4,9 @@ use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Factory\AppFactory;
 use Slim\Exception\HttpNotFoundException;
-use ThiagoLuz\Tarefas\Service;
-use ThiagoLuz\Tarefas\Service\TarefasService;
+use Projetux\Service\TarefaException;
+use Projetux\Infra\Debug;
+use Projetux\Math\Basic;
  
 require __DIR__ . '/vendor/autoload.php';
  
@@ -27,11 +28,11 @@ $errorMiddleware->setErrorHandler(HttpNotFoundException::class, function (
         ->withStatus(404);
 });
  
-$app->get('/tarefas', function (Request $request, Response $response, array $args) {
-    $tarefas_service = new TarefasService();
-    $tarefas = $tarefas_service->getAllTarefas();
-    $response->getBody()->write(json_encode($tarefas));
-    return $response->withHeader('content-type', 'application/json');
+$app->get('/math/quadrado/{num1}', function (Request $request, Response $response, array $args) {
+$basic = new Basic();
+$resultado = $basic->quadrado($args["num1"]);
+$response->getBody()->write((string)$resultado);
+return $response;   
 });
 $app->post('/tarefas', function (Request $request, Response $response, array $args) {
     $paramentos = (array) $request->getParsedBody();
